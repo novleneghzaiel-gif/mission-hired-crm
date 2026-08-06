@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mission:Hired — CRM</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { margin:0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useEffect, useRef } = React;
+
+// ---------- Brand tokens ----------
+const BRAND = {
+  ink: "#04342C",
+  mid: "#1D9E75",
+  soft: "#5DCAA5",
+  mint: "#E9F7F1",
+  mintBorder: "#CDEDDF",
+};
+
+const STATUS = {
+  nouveau:     { label: "Nouveau",     fg: "#475569", bg: "#F1F5F9", border: "#E2E8F0" },
+  attribue:    { label: "Attribué",    fg: BRAND.ink,  bg: BRAND.mint, border: BRAND.mintBorder },
+  contacte:    { label: "Contacté",    fg: "#1D4ED8",  bg: "#EFF6FF", border: "#DBEAFE" },
+  injoignable: { label: "Injoignable", fg: "#B45309",  bg: "#FFFBEB", border: "#FDE68A" },
+  interesse:   { label: "Intéressé",   fg: "#6D28D9",  bg: "#F5F3FF", border: "#E9D5FF" },
+  paye:        { label: "Payé",        fg: "#0F766E",  bg: "#F0FDFA", border: "#99F6E4" },
+  rejete:      { label: "Rejeté",      fg: "#B91C1C",  bg: "#FEF2F2", border: "#FECACA" },
+};
+const STATUS_ORDER = ["nouveau", "attribue", "contacte", "injoignable", "interesse", "paye", "rejete"];
+
+const SCORE_CFG = {
+  hot:  { label: "Hot",  fg: "#B91C1C", bg: "#FEF2F2", icon: "🔥" },
+  warm: { label: "Warm", fg: "#B45309", bg: "#FFFBEB", icon: "⭐" },
+  cold: { label: "Cold", fg: "#1D4ED8", bg: "#EFF6FF", icon: "❄️" },
+};
+
+const ADMIN_PASSWORD = "MissionHired2026"; // 🔒 change ce mot de passe ici
+const AGENTS = ["Novlene", "Lin", "Maram", "Samer"];
+const ADMINS = ["Maram", "Novlene"]; // agents ayant aussi accès à la vue Admin
+const CYCLES = ["Terminale Licence", "Terminale Master", "Terminale Cycle ingénieur"];
+const DEFAULT_PRICES = { standard: 129, premium: 329 };
+
+// 🔗 Colle ici l'URL de ton Web App Google Apps Script (voir instructions fournies séparément)
+// Tant que c'est vide, le CRM tourne sur les données de démo ci-dessous.
+const API_URL = "https://script.google.com/macros/s/AKfycbyfqAwR8xCy_-kxoBLmsvtsOne9SY9RchC_O2ambvrPCb8gmxksFtoF_CRchFXsTz0/exec";
+
+const DEMO_SEED = [
+  { id: 1, nom: "Nayrouz", ville: "Bizerte", institut: "Esprit", instType: "privé", cycle: "Terminale Cycle ingénieur", specialite: "Iot", situation: "CV + LinkedIn prêts, a commencé à postuler sans succès", bootcamp: "oui", tel: "53196363", pays: "France, Belgique, Pays-Bas", agent: null, status: "contacte", pack: null, createdAt: "2026-07-25T22:24:58", lastContactAt: "2026-07-25T22:24:58", notes: [{ author: "Système", date: "25/07 22:24", text: "Contactée via WhatsApp personnel." }] },
+  { id: 2, nom: "Bara Nsaibia", ville: "Sidi Ali Ben Aoun", institut: "Institut Supérieur des Etudes Technologiques de Sidi Bouzid", instType: "public", cycle: "Terminale Licence", specialite: "Multimédia et développement web", situation: "CV + LinkedIn prêts, a commencé à postuler sans succès", bootcamp: "oui", tel: "92049451", pays: "France, Allemagne, Belgique, Pays-Bas", agent: null, status: "paye", pack: "premium", customPrice: 329, createdAt: "2026-07-25T03:25:26", lastContactAt: "2026-07-30T12:00:00", notes: [{ author: "Système", date: "25/07 03:25", text: "Contacté via WhatsApp personnel." }, { author: "Système", date: "30/07 12:00", text: "Paiement reçu : 329 DT." }] },
+  { id: 3, nom: "Youssef Dhouib", ville: "Sfax", institut: "Isims", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Génie logiciel (informatique dev et ia)", situation: "CV + LinkedIn prêts", bootcamp: "oui", tel: "44310525", pays: "France, Allemagne, Belgique, Pays-Bas, Portugal", agent: null, status: "contacte", pack: null, createdAt: "2026-07-25T14:24:44", lastContactAt: "2026-07-25T14:24:44", notes: [{ author: "Système", date: "25/07 14:24", text: "Contacté via WhatsApp personnel." }] },
+  { id: 4, nom: "Gharsalli Balcem", ville: "Tunis", institut: "ENSIT", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Génie civil", situation: "Ne sait pas par où commencer", bootcamp: "oui", tel: "94804366", pays: "France, Belgique", agent: "Maram", status: "paye", pack: "premium", customPrice: 420, createdAt: "2026-07-24T12:16:35", lastContactAt: "2026-07-30T12:00:00", notes: [{ author: "Maram", date: "24/07 12:16", text: "Contactée, tarif annoncé 420 DT." }, { author: "Maram", date: "30/07 12:00", text: "Paiement reçu : 420 DT." }] },
+  { id: 5, nom: "Akhsay Nadia", ville: "Ariana Soukra", institut: "Université Sesame", instType: "privé", cycle: "Terminale Cycle ingénieur", specialite: "IA & data science", situation: "CV + LinkedIn prêts", bootcamp: "oui", tel: "23803114", pays: "France", agent: null, status: "contacte", pack: null, createdAt: "2026-07-24T13:56:30", lastContactAt: "2026-07-24T13:56:30", notes: [{ author: "Système", date: "24/07 13:56", text: "Contactée indirectement, via sa copine." }] },
+  { id: 6, nom: "Akhsay Latifa", ville: "Ariana", institut: "SESAME University", instType: "privé", cycle: "Terminale Cycle ingénieur", specialite: "Cybersecurity & cloud computing", situation: "CV + LinkedIn prêts", bootcamp: "oui", tel: "56170583", pays: "France", agent: null, status: "contacte", pack: null, createdAt: "2026-07-24T13:59:02", lastContactAt: "2026-07-24T13:59:02", notes: [{ author: "Système", date: "24/07 13:59", text: "Contactée via WhatsApp personnel." }] },
+  { id: 7, nom: "Mohamed Yassine Ben Romdhane", ville: "Sousse", institut: "Enim", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Génie mécanique", situation: "Ne sait pas par où commencer", bootcamp: "oui", tel: "25242042", pays: "France, Belgique, Pays-Bas", agent: "Lin", status: "contacte", pack: null, createdAt: "2026-07-18T10:44:00", lastContactAt: "2026-07-29T00:00:00", notes: [{ author: "Lin", date: "18/07 10:44", text: "Contacté via LinkedIn le 29." }] },
+  { id: 8, nom: "Wesleti Maram", ville: "Tunis Tunisie", institut: "Faculté des sciences de Bizerte", instType: "public", cycle: "Terminale Master", specialite: "Génie climatique et maîtrise de l'énergie", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "27347653", pays: "Allemagne, Canada", agent: "Novlene", status: "injoignable", pack: null, createdAt: "2026-07-29T15:45:03", lastContactAt: "2026-07-29T15:45:03", notes: [{ author: "Novlene", date: "29/07 15:45", text: "Injoignable" }] },
+  { id: 9, nom: "Yassmine Abdelhedi", ville: "Tunis", institut: "Institut supérieur des technologies médicales de tunis", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Génie biopharmaceutique", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "99492235", pays: "France, Canada", agent: "Novlene", status: "injoignable", pack: null, createdAt: "2026-07-29T20:11:21", lastContactAt: "2026-07-29T20:11:21", notes: [{ author: "Novlene", date: "29/07 20:11", text: "Injoignable" }] },
+  { id: 10, nom: "Mariem gioui", ville: "Tunis", institut: "Faculté des sciences de tunis el manar", instType: "public", cycle: "Terminale Master", specialite: "Master de recherche en physique des fluides et transfert", situation: "J'ai un CV et un compte LinkedIn, j'ai commencé à postuler mais sans succès / sans réponse", bootcamp: "oui", tel: "56159365", pays: "France, Suisse", agent: null, status: "rejete", pack: null, createdAt: "2026-07-29T20:43:56", lastContactAt: "2026-07-29T20:43:56", notes: [{ author: "Système", date: "29/07 20:43", text: "Rejetée mon whatss" }] },
+  { id: 11, nom: "Malek kasrani", ville: "Tunis", institut: "Enit", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Minds", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "20216589", pays: "France, Allemagne, Canada, Belgique, Pays-Bas", agent: "Novlene", status: "contacte", pack: null, createdAt: "2026-07-29T20:44:10", lastContactAt: "2026-07-29T20:44:10", notes: [{ author: "Novlene", date: "29/07 20:44", text: "Contactée mon whatss" }] },
+  { id: 12, nom: "Houimli sarra", ville: "Ben arous", institut: "Issat mateur", instType: "public", cycle: "Terminale licence", specialite: "Eea automatisme et informatique industrielle", situation: "Je ne sais pas par où commencer, J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "24393538", pays: "France", agent: "Novlene", status: "injoignable", pack: null, createdAt: "2026-07-29T20:51:09", lastContactAt: "2026-07-29T20:51:09", notes: [{ author: "Novlene", date: "29/07 20:51", text: "Injoignable" }] },
+  { id: 13, nom: "Medamine.benfadhel", ville: "Tunis", institut: "Tekup", instType: "privé", cycle: "Terminale Cycle ingénieur", specialite: "Data science ai", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "52533420", pays: "France, Belgique", agent: null, status: "rejete", pack: null, createdAt: "2026-07-29T20:55:54", lastContactAt: "2026-07-29T20:55:54", notes: [{ author: "Système", date: "29/07 20:55", text: "Rejeté" }] },
+  { id: 14, nom: "SAMOUD MOHAMED AZIZ", ville: "Kélibia", institut: "Enib", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Mécanique", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "", pays: "France, Belgique, Pays-Bas, Italie, Luxembourg", agent: null, status: "rejete", pack: null, createdAt: "2026-07-29T21:02:01", lastContactAt: "2026-07-29T21:02:01", notes: [{ author: "Système", date: "29/07 21:02", text: "Rejetépas de num" }] },
+  { id: 15, nom: "Yesmine ghodhbane", ville: "Nabeul", institut: "Iset nabeul", instType: "public", cycle: "Terminale licence", specialite: "Dsi", situation: "Je ne sais pas par où commencer, J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "23915429", pays: "France", agent: "Novlene", status: "injoignable", pack: null, createdAt: "2026-07-29T21:03:12", lastContactAt: "2026-07-29T21:03:12", notes: [{ author: "Novlene", date: "29/07 21:03", text: "Injoignable" }] },
+  { id: 16, nom: "Islem Ben toumia", ville: "Nabeul", institut: "Institut supérieur de technologie médicale de Tunis", instType: "public", cycle: "Terminale licence", specialite: "Génie biomédicale", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "25522265", pays: "Italie", agent: "Novlene", status: "contacte", pack: null, createdAt: "2026-07-29T21:06:49", lastContactAt: "2026-07-29T21:06:49", notes: [{ author: "Novlene", date: "29/07 21:06", text: "Contactée mon whatss" }] },
+  { id: 17, nom: "iheb jendoubi", ville: "sousse", institut: "école polytechnique sousse", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "genie civil", situation: "J'ai un CV et un compte LinkedIn, j'ai commencé à postuler mais sans succès / sans réponse", bootcamp: "oui", tel: "99002931", pays: "France, Belgique, Pays-Bas, italie", agent: "Lin", status: "contacte", pack: null, createdAt: "2026-07-29T21:09:49", lastContactAt: "2026-07-29T21:09:49", notes: [{ author: "Lin", date: "29/07 21:09", text: "Contactée par lin  le 30" }] },
+  { id: 18, nom: "abdessalem fakhar", ville: "tunis", institut: "INSAT", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Chimie industrielle", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "94723307", pays: "France, Allemagne, Canada, Belgique, Pays-Bas", agent: null, status: "nouveau", pack: null, createdAt: "2026-07-29T21:09:52", lastContactAt: null, notes: [] },
+  { id: 19, nom: "Ben soltane Mariem", ville: "Tunis", institut: "Ecole national d'architecture et d'urbanisme tunis", instType: "public", cycle: "Diplome en architecture", specialite: "Architecture", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "25303577", pays: "France, Belgique, Italie , Espagne", agent: null, status: "nouveau", pack: null, createdAt: "2026-07-29T21:11:35", lastContactAt: null, notes: [] },
+  { id: 20, nom: "Cherif Samar", ville: "Kairouan", institut: "Ecole nationale d'ingénieurs de Gabes", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Génie électrique automatique", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "26429454", pays: "France, Allemagne, Belgique, Pays-Bas", agent: null, status: "nouveau", pack: null, createdAt: "2026-07-29T21:12:20", lastContactAt: null, notes: [] },
+  { id: 21, nom: "Ghezaiel Zeineb", ville: "Tunis", institut: "Esprit", instType: "privé", cycle: "Terminale Cycle ingénieur", specialite: "Ingénierie en informatique", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "92565053", pays: "France, Allemagne, Canada, Pays-Bas", agent: "Lin", status: "contacte", pack: null, createdAt: "2026-07-29T21:12:25", lastContactAt: "2026-07-29T21:12:25", notes: [{ author: "Lin", date: "29/07 21:12", text: "Contactée par lin le 30" }] },
+  { id: 22, nom: "Chayma sbai", ville: "Kairouan", institut: "Iset nabeul", instType: "public", cycle: "Terminale licence", specialite: "Génie énergitique", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "20813173", pays: "France, Doubai", agent: null, status: "nouveau", pack: null, createdAt: "2026-07-29T21:12:57", lastContactAt: null, notes: [] },
+  { id: 23, nom: "bochra chatti", ville: "Sousse", institut: "Enis", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Electromecanique specialite productique et automatiqation industrielle", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "93877118", pays: "France, Canada", agent: null, status: "nouveau", pack: null, createdAt: "2026-07-29T21:15:15", lastContactAt: null, notes: [] },
+  { id: 24, nom: "HOUIMELI Mortadha", ville: "Ariana", institut: "ESPRIT", instType: "privé", cycle: "Terminale Cycle ingénieur", specialite: "ERP/BI", situation: "J'ai un CV et un compte LinkedIn, j'ai commencé à postuler mais sans succès / sans réponse", bootcamp: "oui", tel: "94869027", pays: "France, Allemagne, Belgique", agent: "Lin", status: "contacte", pack: null, createdAt: "2026-07-29T21:19:54", lastContactAt: "2026-07-29T21:19:54", notes: [{ author: "Lin", date: "29/07 21:19", text: "Contactée par lin le 30" }] },
+  { id: 25, nom: "Zaalouni ameni", ville: "Sers el kef", institut: "Enstab", instType: "public", cycle: "2 ème cycle ingénieur", specialite: "Technologie avancée", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "97762626", pays: "France, Canada, Belgique, Pays-Bas", agent: "Lin", status: "injoignable", pack: null, createdAt: "2026-07-29T21:30:34", lastContactAt: "2026-07-29T21:30:34", notes: [{ author: "Lin", date: "29/07 21:30", text: "Injoignable par lin le 30" }] },
+  { id: 26, nom: "Isra chaabani", ville: "Thala", institut: "Cesi", instType: "privé", cycle: "MASTÈRE SPÉCIALISÉ MANAGER DE LA SÉCURITÉ DES SYSTÈMES D'INFORMATION", specialite: "Informatique", situation: "J'ai un CV et un compte LinkedIn, j'ai commencé à postuler mais sans succès / sans réponse", bootcamp: "oui", tel: "96870301", pays: "France", agent: "Lin", status: "injoignable", pack: null, createdAt: "2026-07-29T21:38:30", lastContactAt: "2026-07-29T21:38:30", notes: [{ author: "Lin", date: "29/07 21:38", text: "Injoignable par lin le 30" }] },
+  { id: 27, nom: "Thabet miriam", ville: "Tunis", institut: "Esat", instType: "privé", cycle: "Terminale Cycle ingénieur", specialite: "Aeronautique", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "95820206", pays: "Allemagne, Canada, Spain", agent: null, status: "rejete", pack: null, createdAt: "2026-07-29T21:41:35", lastContactAt: "2026-07-29T21:41:35", notes: [{ author: "Système", date: "29/07 21:41", text: "Rejeté" }] },
+  { id: 28, nom: "Rana linda", ville: "Sfax", institut: "Fsegs", instType: "public", cycle: "Terminale licence", specialite: "informatique de gestion", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "26615655", pays: "France", agent: "Lin", status: "injoignable", pack: null, createdAt: "2026-07-29T22:05:45", lastContactAt: "2026-07-29T22:05:45", notes: [{ author: "Lin", date: "29/07 22:05", text: "Injoignable par lin le 30" }] },
+  { id: 29, nom: "Ahmed", ville: "Sousse", institut: "Isitcom", instType: "public", cycle: "Terminale licence", specialite: "Telecommunications", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "28726895", pays: "France, Allemagne, Belgique", agent: null, status: "rejete", pack: null, createdAt: "2026-07-29T22:18:30", lastContactAt: "2026-07-29T22:18:30", notes: [{ author: "Système", date: "29/07 22:18", text: "Rejeté" }] },
+  { id: 30, nom: "Emna Taghlet", ville: "Tunis", institut: "INSAT", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Informatique industrielle et automatique", situation: "J'ai un CV et un compte LinkedIn, j'ai commencé à postuler mais sans succès / sans réponse", bootcamp: "oui", tel: "26258424", pays: "France, Allemagne, Belgique, Pays-Bas", agent: "Maram", status: "injoignable", pack: null, createdAt: "2026-07-29T22:20:05", lastContactAt: "2026-07-29T22:20:05", notes: [{ author: "Maram", date: "29/07 22:20", text: "Injoignable par maram" }] },
+  { id: 31, nom: "Akri Mourad", ville: "Nabeul", institut: "Polytech monastir", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Spécialité systèmes embarqués & IOT", situation: "J'ai un CV et un compte LinkedIn, j'ai commencé à postuler mais sans succès / sans réponse", bootcamp: "oui", tel: "52914505", pays: "France, Canada, Belgique", agent: "Lin", status: "contacte", pack: null, createdAt: "2026-07-29T22:34:04", lastContactAt: "2026-07-29T22:34:04", notes: [{ author: "Lin", date: "29/07 22:34", text: "Contacté par lin" }] },
+  { id: 32, nom: "Majd ben rjab", ville: "Sfax", institut: "Iset Gabes", instType: "public", cycle: "Terminale licence", specialite: "Sécurité réseau", situation: "Je ne sais pas par où commencer", bootcamp: "non", tel: "23119606", pays: "France", agent: null, status: "rejete", pack: null, createdAt: "2026-07-29T23:13:05", lastContactAt: "2026-07-29T23:13:05", notes: [{ author: "Système", date: "29/07 23:13", text: "Rejeté" }] },
+  { id: 33, nom: "Sehli Salsabil", ville: "Ben Arous", institut: "ESSECT", instType: "public", cycle: "Terminale Master", specialite: "Macroéconomie et finance internationale", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "24599102", pays: "France", agent: "Novlene", status: "contacte", pack: null, createdAt: "2026-07-29T23:18:51", lastContactAt: "2026-07-29T23:18:51", notes: [{ author: "Novlene", date: "29/07 23:18", text: "Contactée mon whatss" }] },
+  { id: 34, nom: "Mhamdi maria", ville: "Tunis", institut: "Tunis business school", instType: "privé", cycle: "Terminale licence, Junior bachelor", specialite: "Major:accounting minor:finance", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "92714630", pays: "Allemagne, Canada, Belgique", agent: "Maram", status: "contacte", pack: null, createdAt: "2026-07-29T23:38:25", lastContactAt: "2026-07-29T23:38:25", notes: [{ author: "Maram", date: "29/07 23:38", text: "Contactée par maram mon whtss" }] },
+  { id: 35, nom: "Zouaoui med aziz", ville: "Tunis", institut: "Msb", instType: "privé", cycle: "Terminale Master", specialite: "Data analytics", situation: "J'ai un CV et un compte LinkedIn, j'ai commencé à postuler mais sans succès / sans réponse", bootcamp: "oui", tel: "29100737", pays: "Allemagne, Belgique, Suisse", agent: "Lin", status: "injoignable", pack: null, createdAt: "2026-07-29T23:49:16", lastContactAt: "2026-07-29T23:49:16", notes: [{ author: "Lin", date: "29/07 23:49", text: "Injoignable par lin" }] },
+  { id: 36, nom: "Moetez boukadida", ville: "Hammamet", institut: "Polytec", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Génie industrielle", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "24730625", pays: "France, Canada, Belgique, Pays-Bas", agent: "Lin", status: "injoignable", pack: null, createdAt: "2026-07-29T23:50:31", lastContactAt: "2026-07-29T23:50:31", notes: [{ author: "Lin", date: "29/07 23:50", text: "A rappeler par lin" }] },
+  { id: 37, nom: "chaima ouechtati", ville: "jendouba", institut: "faculté de sciences juridiques économique et de gestion de jendouba", instType: "public", cycle: "Terminale licence", specialite: "finance", situation: "J'ai un CV et un compte LinkedIn, j'ai commencé à postuler mais sans succès / sans réponse", bootcamp: "oui", tel: "27805579", pays: "France, Allemagne, Canada, Belgique", agent: "Maram", status: "contacte", pack: null, createdAt: "2026-07-29T23:56:55", lastContactAt: "2026-07-29T23:56:55", notes: [{ author: "Maram", date: "29/07 23:56", text: "Contactée par maram" }] },
+  { id: 38, nom: "Mrad Bchira", ville: "Jammel, Monastir ,Tunisia", institut: "Isitcom soussa", instType: "public", cycle: "Terminale licence", specialite: "Licence en technologies de l'information et de la communication", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "29956391", pays: "Canada", agent: "Maram", status: "injoignable", pack: null, createdAt: "2026-07-30T00:04:05", lastContactAt: "2026-07-30T00:04:05", notes: [{ author: "Maram", date: "30/07 00:04", text: "Injoignable - maram" }] },
+  { id: 39, nom: "Bouattour yessine", ville: "Sfax", institut: "Enetcom", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Ingénierie des données et des systèmes décisionnels", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "24926104", pays: "France, Allemagne, Canada, Belgique, Pays-Bas", agent: "Novlene", status: "injoignable", pack: null, createdAt: "2026-07-30T00:17:28", lastContactAt: "2026-07-30T00:17:28", notes: [{ author: "Novlene", date: "30/07 00:17", text: "Injoignable" }] },
+  { id: 40, nom: "Jamila kefi", ville: "Bizerte", institut: "Institut supérieur de  gestion de Bizerte", instType: "public", cycle: "Terminale licence", specialite: "Informatique de gestion spécialité BI", situation: "j'ai un compte LinkedIn et je n'ai pas un cv", bootcamp: "oui", tel: "51085221", pays: "France, Belgique", agent: "Novlene", status: "contacte", pack: null, createdAt: "2026-07-30T01:01:44", lastContactAt: "2026-07-30T01:01:44", notes: [{ author: "Novlene", date: "30/07 01:01", text: "Contactée mon whatss" }] },
+  { id: 41, nom: "Ferdaws saidi", ville: "Sousse", institut: "Ecole polytechnique de sousse", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Data science", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "53839648", pays: "France, Allemagne, Canada, Belgique, Pays-Bas", agent: "Lin", status: "contacte", pack: null, createdAt: "2026-07-30T01:08:53", lastContactAt: "2026-07-30T01:08:53", notes: [{ author: "Lin", date: "30/07 01:08", text: "Contactée par lin le 30" }] },
+  { id: 42, nom: "Maram hasni", ville: "Jendouba", institut: "Institut supérieur des études technologiques de Jendouba", instType: "public", cycle: "Terminale licence", specialite: "Développement web", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "93152950", pays: "Allemagne", agent: "Novlene", status: "injoignable", pack: null, createdAt: "2026-07-30T01:59:14", lastContactAt: "2026-07-30T01:59:14", notes: [{ author: "Novlene", date: "30/07 01:59", text: "A rappeler rekda" }] },
+  { id: 43, nom: "Layouni Ahmed", ville: "Mahdia", institut: "Epi sousse", instType: "privé", cycle: "Terminale Cycle ingénieur", specialite: "Cyber sécurité", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "53782007", pays: "France, Allemagne", agent: "Novlene", status: "contacte", pack: null, createdAt: "2026-07-30T02:27:22", lastContactAt: "2026-07-30T02:27:22", notes: [{ author: "Novlene", date: "30/07 02:27", text: "Contacté par novlen il va payer" }] },
+  { id: 44, nom: "Hosni Mohamed ali", ville: "Mourouj", institut: "ISAMM", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Génie logiciel", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "non", tel: "27808830", pays: "France, Allemagne, Canada, Belgique, Pays-Bas", agent: null, status: "rejete", pack: null, createdAt: "2026-07-30T08:38:55", lastContactAt: "2026-07-30T08:38:55", notes: [{ author: "Système", date: "30/07 08:38", text: "Rejeté" }] },
+  { id: 45, nom: "Hazbri ibtihel", ville: "Tunis", institut: "École supérieure d'agriculture de mogran", instType: "public", cycle: "2 ème année cycle ingénieur", specialite: "Économie rural", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "20174562", pays: "France", agent: null, status: "rejete", pack: null, createdAt: "2026-07-30T08:45:23", lastContactAt: "2026-07-30T08:45:23", notes: [{ author: "Système", date: "30/07 08:45", text: "Rejeté" }] },
+  { id: 46, nom: "Bouznif Ghofran", ville: "Medenine", institut: "Faculté des sciences sfax", instType: "public", cycle: "Terminale licence", specialite: "Ingénierie des systèmes informatiques Internet des objets", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "50163417", pays: "France, Canada, Belgique,", agent: "Novlene", status: "injoignable", pack: null, createdAt: "2026-07-30T10:07:16", lastContactAt: "2026-07-30T10:07:16", notes: [{ author: "Novlene", date: "30/07 10:07", text: "Injoignable" }] },
+  { id: 47, nom: "Yasmine Menzli", ville: "Monastir", institut: "Centre sectoriel de formation aux métiers du tertiaire Sousse", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "BTP informatique de gestion", situation: "Stage PFE international", bootcamp: "oui", tel: "29728771", pays: "Allemagne, Belgique", agent: null, status: "rejete", pack: null, createdAt: "2026-07-30T10:24:42", lastContactAt: "2026-07-30T10:24:42", notes: [{ author: "Système", date: "30/07 10:24", text: "Hors sujet" }] },
+  { id: 48, nom: "Bejaoui Ghofrane", ville: "Manouba", institut: "Faculté des Sciences Économiques et de Gestion de Tunis", instType: "public", cycle: "Terminale Master", specialite: "Licence en sciences de gestion spécialité management", situation: "J'ai un CV et un compte LinkedIn, j'ai commencé à postuler mais sans succès / sans réponse", bootcamp: "oui", tel: "51234250", pays: "France, Belgique, Italie", agent: null, status: "rejete", pack: null, createdAt: "2026-07-30T11:13:13", lastContactAt: "2026-07-30T11:13:13", notes: [{ author: "Système", date: "30/07 11:13", text: "Rejetée" }] },
+  { id: 49, nom: "Ben Abdelhafidh Ghaith", ville: "Kélibia", institut: "École nationale d'ingénieurs de tunis (ENIT)", instType: "public", cycle: "Je suis en 2ème année cycle ingénieur", specialite: "Génie industriel", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "25901686", pays: "France", agent: null, status: "rejete", pack: null, createdAt: "2026-07-30T11:13:55", lastContactAt: "2026-07-30T11:13:55", notes: [{ author: "Système", date: "30/07 11:13", text: "Rejeté" }] },
+  { id: 50, nom: "Zoukar hadil", ville: "Monastir", institut: "Faculté des sciences Monastir", instType: "public", cycle: "Terminale licence", specialite: "Systemes embarques", situation: "J'ai un CV et un compte LinkedIn, j'ai commencé à postuler mais sans succès / sans réponse", bootcamp: "oui", tel: "99212774", pays: "France, Belgique", agent: "Maram", status: "contacte", pack: null, createdAt: "2026-07-30T11:38:35", lastContactAt: "2026-07-30T11:38:35", notes: [{ author: "Maram", date: "30/07 11:38", text: "Contactée - Maram" }] },
+  { id: 51, nom: "Rana brn khaled", ville: "Mahdia", institut: "Issat mahdia", instType: "public", cycle: "Terminale licence", specialite: "TIC", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "96375324", pays: "France, Allemagne, Canada", agent: "Novlene", status: "injoignable", pack: null, createdAt: "2026-07-30T11:51:28", lastContactAt: "2026-07-30T11:51:28", notes: [{ author: "Novlene", date: "30/07 11:51", text: "Injoignable" }] },
+  { id: 52, nom: "Ameni azaiez", ville: "Kebili", institut: "Fs gabes", instType: "public", cycle: "Terminale licence", specialite: "Genie logiciel", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "20156283", pays: "Allemagne", agent: "Novlene", status: "injoignable", pack: null, createdAt: "2026-07-30T12:55:18", lastContactAt: "2026-07-30T12:55:18", notes: [{ author: "Novlene", date: "30/07 12:55", text: "Injoignable" }] },
+  { id: 53, nom: "Mejri may", ville: "Nabeul", institut: "Institut supérieur des langues appliquées et informatique Béja", instType: "public", cycle: "Terminale licence", specialite: "Licence en sciences informatique génie logiciel", situation: "J'ai un CV et un compte LinkedIn, mais je n'ai pas encore commencé à postuler", bootcamp: "oui", tel: "23840886", pays: "France, Canada, Belgique, Pays-Bas, Suisse", agent: null, status: "rejete", pack: null, createdAt: "2026-07-30T13:44:12", lastContactAt: "2026-07-30T13:44:12", notes: [{ author: "Système", date: "30/07 13:44", text: "Rejetée mon whats" }] },
+  { id: 54, nom: "Ltaief Mariem", ville: "Soukra", institut: "ENIG", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Génie mécanique", situation: "J'ai un CV et un compte LinkedIn, j'ai commencé à postuler mais sans succès / sans réponse", bootcamp: "oui", tel: "92551426", pays: "France, Allemagne, Canada, Belgique", agent: "Novlene", status: "contacte", pack: null, createdAt: "2026-07-30T14:08:21", lastContactAt: "2026-07-30T14:08:21", notes: [{ author: "Novlene", date: "30/07 14:08", text: "Contactée mon whatss" }] },
+  { id: 55, nom: "Rana ben khalifa", ville: "Sousse , tunisie", institut: "EPI Digital School", instType: "privé", cycle: "Terminale Cycle ingénieur", specialite: "Cyber sécurité", situation: "J'ai un CV et un compte LinkedIn, j'ai commencé à postuler mais sans succès / sans réponse", bootcamp: "oui", tel: "29053346", pays: "France, Italie", agent: null, status: "rejete", pack: null, createdAt: "2026-07-30T14:14:17", lastContactAt: "2026-07-30T14:14:17", notes: [{ author: "Système", date: "30/07 14:14", text: "Rejetée" }] },
+  { id: 56, nom: "Rami dridi", ville: "Manouba tunis", institut: "ENIT", instType: "public", cycle: "Terminale Cycle ingénieur", specialite: "Électrique", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "51262760", pays: "France, Allemagne, Belgique, Pays-Bas", agent: "Lin", status: "contacte", pack: null, createdAt: "2026-07-30T16:02:52", lastContactAt: "2026-07-30T16:02:52", notes: [{ author: "Lin", date: "30/07 16:02", text: "Contacté par lin" }] },
+  { id: 57, nom: "Karouia Taissir", ville: "Nabeul", institut: "Institut supérieur de technologies médical tunis", instType: "public", cycle: "Terminale licence", specialite: "Geni biomedical (technologies de dispositifs médicaux )", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "50835758", pays: "France, Canada", agent: null, status: "nouveau", pack: null, createdAt: "2026-07-30T18:01:33", lastContactAt: null, notes: [] },
+  { id: 58, nom: "Ibn hadj ali zeineb", ville: "Nabeul", institut: "Institut supérieur des technologies médicales de Tunis", instType: "public", cycle: "Terminale licence", specialite: "Génie biomédical", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "55472761", pays: "France, Belgique", agent: null, status: "nouveau", pack: null, createdAt: "2026-07-30T18:08:51", lastContactAt: null, notes: [] },
+  { id: 59, nom: "Fatma Marnissi", ville: "Bizerte", institut: "Institut superieur des technologies medicales du tunis", instType: "public", cycle: "Terminale licence", specialite: "technologie d' imagerie medicale", situation: "J'ai un CV et un compte LinkedIn, j'ai commencé à postuler mais sans succès / sans réponse", bootcamp: "oui", tel: "98131673", pays: "France, Allemagne, Italia", agent: null, status: "nouveau", pack: null, createdAt: "2026-07-30T18:09:17", lastContactAt: null, notes: [] },
+  { id: 60, nom: "Mariem elhaj", ville: "Gafsa", institut: "Iset gafsa", instType: "public", cycle: "2 éme année licence", specialite: "Génie mécanique", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "52913052", pays: "Allemagne", agent: null, status: "nouveau", pack: null, createdAt: "2026-07-30T18:12:52", lastContactAt: null, notes: [] },
+  { id: 61, nom: "Khouildi thouraya", ville: "Tunis", institut: "Fsegt", instType: "public", cycle: "Doctorat gestion", specialite: "Gestion", situation: "Just un cv", bootcamp: "oui", tel: "90206652", pays: "Londres", agent: null, status: "nouveau", pack: null, createdAt: "2026-07-30T18:18:39", lastContactAt: null, notes: [] },
+  { id: 62, nom: "Shayma dridi", ville: "Tunis", institut: "Isam manouba", instType: "public", cycle: "Terminale licence", specialite: "Big data", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "23904601", pays: "France", agent: null, status: "nouveau", pack: null, createdAt: "2026-07-30T18:34:33", lastContactAt: null, notes: [] },
+  { id: 63, nom: "Ben gamra siwar", ville: "Nabeul", institut: "Institut supérieur des sciences appliquées et technologie de kairouan", instType: "public", cycle: "Terminale licence", specialite: "Génie énergétique spécialisée en énergies renouvelables", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "97572538", pays: "Espagne", agent: null, status: "nouveau", pack: null, createdAt: "2026-07-30T18:46:14", lastContactAt: null, notes: [] },
+  { id: 64, nom: "Mohamed ayari", ville: "Tebourba", institut: "Polytechnique international", instType: "privé", cycle: "Terminale Cycle ingénieur", specialite: "Génie industriel", situation: "Je ne sais pas par où commencer", bootcamp: "oui", tel: "98117493", pays: "France, Allemagne, Belgique, Pays-Bas", agent: null, status: "nouveau", pack: null, createdAt: "2026-07-30T18:49:25", lastContactAt: null, notes: [] },
+];
+
+// Convertit une ligne renvoyée par le Google Apps Script en objet candidat du CRM
+function mapSheetRow(row) {
+  return {
+    id: row.id,
+    nom: row.nom || "(sans nom)",
+    ville: row.ville || "",
+    institut: row.institut || "",
+    instType: "",
+    cycle: row.cycle || "",
+    specialite: row.specialite || "",
+    situation: row.situation || "",
+    bootcamp: row.bootcamp === "non" ? "non" : "oui",
+    tel: (row.tel || "").toString(),
+    pays: row.pays || "",
+    agent: row.agent || null,
+    status: row.status || "nouveau",
+    pack: row.pack || null,
+    customPrice: row.customPrice ?? null,
+    createdAt: row.createdAt || new Date().toISOString(),
+    lastContactAt: row.lastContactAt || null,
+    notes: Array.isArray(row.notes) ? row.notes : [],
+  };
+}
+
+// Envoie une mise à jour vers le Google Sheet (fire-and-forget). text/plain évite le préflight CORS.
+function syncToSheet(id, patch) {
+  if (!API_URL) return;
+  fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ id, ...patch }),
+  }).catch((err) => console.error("Sync Google Sheet échouée :", err));
+}
+
+function timeAgo(iso) {
+  if (!iso) return "jamais";
+  const d = new Date(iso);
+  const days = Math.floor((Date.now() - d) / (1000 * 60 * 60 * 24));
+  if (days < 1) return "aujourd'hui";
+  if (days === 1) return "hier";
+  return `il y a ${days} j`;
+}
+function hoursSince(iso) {
+  if (!iso) return Infinity;
+  return (Date.now() - new Date(iso)) / (1000 * 60 * 60);
+}
+function initials(nom) {
+  return nom.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+}
+
+// Score basé sur la fraîcheur : moins de 24h = hot, 24-48h = warm, plus de 48h = cold
+// (basé sur le dernier contact, ou la date d'ajout si jamais contacté)
+function computeScore(c) {
+  const ref = c.lastContactAt || c.createdAt;
+  const hours = hoursSince(ref);
+  if (hours < 24) return "hot";
+  if (hours < 48) return "warm";
+  return "cold";
+}
+const SCORE_ORDER = { hot: 0, warm: 1, cold: 2 };
+
+function waLink(c) {
+  if (!c.tel) return null;
+  const phone = "216" + c.tel.replace(/\s/g, "");
+  const messages = {
+    nouveau: `Bonjour ${c.nom.split(" ")[0]}, ici l'équipe Mission:Hired 👋 On a bien reçu votre inscription pour l'accompagnement stage/PFE à l'international. On vous appelle très vite !`,
+    attribue: `Bonjour ${c.nom.split(" ")[0]}, ici l'équipe Mission:Hired 👋 On a bien reçu votre inscription pour l'accompagnement stage/PFE à l'international. On vous appelle très vite !`,
+    injoignable: `Bonjour, ici l'équipe Mission Hired. Nous avons essayé de vous contacter mais vous n'étiez pas disponible. Merci de nous recontacter dès que vous serez disponible.`,
+    interesse: `Bonjour ${c.nom.split(" ")[0]}, merci pour votre appel ! Voici le récapitulatif des packs Mission:Hired dont on a discuté.`,
+    contacte: `Rebonjour et bienvenue à Mission Hired\nVeuillez nous laisser votre confirmation ces deux jours au maximum afin que je puisse vous réserver votre place. Merci !`,
+    paye: `Bonjour ${c.nom.split(" ")[0]}, bienvenue chez Mission:Hired 🎉 Votre inscription est confirmée, on vous envoie le programme très vite.`,
+    rejete: `Bonjour ${c.nom.split(" ")[0]}, merci pour votre temps. N'hésitez pas à revenir vers nous si votre situation évolue !`,
+  };
+  return `https://wa.me/${phone}?text=${encodeURIComponent(messages[c.status] || messages.nouveau)}`;
+}
+
+function StatusBadge({ status }) {
+  const s = STATUS[status];
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap"
+      style={{ color: s.fg, backgroundColor: s.bg, borderColor: s.border }}>
+      <span style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: s.fg, display: "inline-block" }}></span>{s.label}
+    </span>
+  );
+}
+function ScoreBadge({ score }) {
+  const s = SCORE_CFG[score];
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap"
+      style={{ color: s.fg, backgroundColor: s.bg }}>
+      <span>{s.icon}</span>{s.label}
+    </span>
+  );
+}
+
+function MissionHiredCRM() {
+  const [role, setRole] = useState("agent");
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [currentAgent, setCurrentAgent] = useState("Maram");
+  const [candidates, setCandidates] = useState(API_URL ? [] : DEMO_SEED);
+  const [loading, setLoading] = useState(!!API_URL);
+  const [syncError, setSyncError] = useState(null);
+  const [prices, setPrices] = useState(DEFAULT_PRICES);
+  const [selectedId, setSelectedId] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterScope, setFilterScope] = useState("all");
+  const [filterScore, setFilterScore] = useState("all");
+  const [filterCycle, setFilterCycle] = useState("all");
+  const [filterBootcamp, setFilterBootcamp] = useState("all");
+  const [filterAgentAdmin, setFilterAgentAdmin] = useState("all");
+  const [view, setView] = useState("liste");
+  const [search, setSearch] = useState("");
+  const [noteDraft, setNoteDraft] = useState("");
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 60000); // recalcule les scores chaque minute
+    return () => clearInterval(t);
+  }, []);
+
+  const enriched = useMemo(() => candidates.map((c) => ({ ...c, score: computeScore(c) })), [candidates, tick]);
+  const selected = enriched.find((c) => c.id === selectedId) || null;
+  const isAdmin = ADMINS.includes(currentAgent);
+
+  // Charge les candidats depuis le Google Sheet au démarrage, puis toutes les 45s (nouvelles réponses du formulaire)
+  useEffect(() => {
+    if (!API_URL) return;
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch(API_URL);
+        const rows = await res.json();
+        if (!cancelled) {
+          setCandidates(rows.map(mapSheetRow));
+          setSyncError(null);
+        }
+      } catch (err) {
+        console.error("Chargement Google Sheet échoué :", err);
+        if (!cancelled) setSyncError("Connexion au Google Sheet impossible.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    const interval = setInterval(load, 45000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  function updateCandidate(id, patch) {
+    setCandidates((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    syncToSheet(id, patch);
+  }
+  function assignToMe(id) { updateCandidate(id, { agent: currentAgent, status: "attribue" }); }
+  function setStatus(id, status) {
+    const c = candidates.find((x) => x.id === id);
+    const patch = { status, lastContactAt: new Date().toISOString() };
+    if (role === "agent" && !c.agent) patch.agent = currentAgent; // s'attribue automatiquement la fiche s'il change son statut
+    updateCandidate(id, patch);
+    if (status === "injoignable") {
+      setSelectedId(null);
+      setView("relance");
+    }
+  }
+  function setPack(id, pack) { updateCandidate(id, { pack, status: "paye", lastContactAt: new Date().toISOString() }); }
+  function addNote(id) {
+    if (!noteDraft.trim()) return;
+    const c = candidates.find((x) => x.id === id);
+    const now = new Date();
+    const dateLabel = String(now.getDate()).padStart(2, "0") + "/" + String(now.getMonth() + 1).padStart(2, "0") + " " + now.toTimeString().slice(0, 5);
+    const note = { author: currentAgent, date: dateLabel, text: noteDraft.trim() };
+    updateCandidate(id, { notes: [...c.notes, note], lastContactAt: now.toISOString() });
+    setNoteDraft("");
+  }
+  function reassign(id, agent) { updateCandidate(id, { agent, status: agent ? "attribue" : "nouveau" }); }
+
+  const filtered = useMemo(() => {
+    let list = [...enriched];
+    if (role === "agent") {
+      if (filterScope === "mine") list = list.filter((c) => c.agent === currentAgent);
+      if (filterScope === "unassigned") list = list.filter((c) => !c.agent);
+    } else if (filterAgentAdmin !== "all") {
+      list = list.filter((c) => c.agent === filterAgentAdmin);
+    }
+    if (view === "relance") list = list.filter((c) => c.status === "injoignable" && (role === "admin" || c.agent === currentAgent));
+    // Les rejetés sont masqués par défaut ; ils restent visibles si on filtre explicitement dessus
+    if (filterStatus === "all") list = list.filter((c) => c.status !== "rejete");
+    if (filterStatus !== "all") list = list.filter((c) => c.status === filterStatus);
+    if (filterScore !== "all") list = list.filter((c) => c.score === filterScore);
+    if (filterCycle !== "all") list = list.filter((c) => c.cycle === filterCycle);
+    if (filterBootcamp !== "all") list = list.filter((c) => c.bootcamp === filterBootcamp);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((c) => [c.nom, c.ville, c.institut, c.specialite].join(" ").toLowerCase().includes(q));
+    }
+    // Tri : hot d'abord, puis warm, puis cold — et dans chaque groupe, du plus récent au plus ancien
+    return list.sort((a, b) => {
+      const sd = SCORE_ORDER[a.score] - SCORE_ORDER[b.score];
+      if (sd !== 0) return sd;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+  }, [enriched, role, filterScope, filterStatus, filterScore, filterCycle, filterBootcamp, filterAgentAdmin, view, search, currentAgent]);
+
+  const stats = useMemo(() => {
+    const unassigned = enriched.filter((c) => !c.agent).length;
+    const mine = enriched.filter((c) => c.agent === currentAgent).length;
+    const toFollowUp = enriched.filter((c) => c.status === "injoignable" && c.agent === currentAgent).length;
+    const hotMine = enriched.filter((c) => c.agent === currentAgent && c.score === "hot" && !["paye", "rejete"].includes(c.status)).length;
+    return { unassigned, mine, toFollowUp, hotMine };
+  }, [enriched, currentAgent]);
+
+  const admin = useMemo(() => {
+    const paid = enriched.filter((c) => c.status === "paye");
+    const revenue = paid.reduce((sum, c) => sum + (c.customPrice ?? prices[c.pack] ?? 0), 0);
+    const standardCount = paid.filter((c) => c.pack === "standard").length;
+    const premiumCount = paid.filter((c) => c.pack === "premium").length;
+    const relances = enriched.filter((c) => c.status === "injoignable").length;
+    const perAgent = AGENTS.map((a) => {
+      const mine = enriched.filter((c) => c.agent === a);
+      const paidMine = mine.filter((c) => c.status === "paye");
+      const rev = paidMine.reduce((sum, c) => sum + (c.customPrice ?? prices[c.pack] ?? 0), 0);
+      return {
+        agent: a, total: mine.length,
+        contactes: mine.filter((c) => ["contacte", "interesse", "paye", "rejete", "injoignable"].includes(c.status)).length,
+        payes: paidMine.length,
+        taux: mine.length ? Math.round((paidMine.length / mine.length) * 100) : 0,
+        revenu: rev,
+      };
+    });
+    return { revenue, standardCount, premiumCount, perAgent, totalPaid: paid.length, relances };
+  }, [enriched, prices]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center" style={{ backgroundColor: "#F7F9F8", color: BRAND.ink }}>
+        <div className="text-sm font-medium">Chargement des candidats depuis le Google Sheet…</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen w-full" style={{ backgroundColor: "#F7F9F8" }}>
+      {syncError && (
+        <div className="px-6 py-2 text-xs font-medium text-center" style={{ backgroundColor: "#FEF2F2", color: "#B91C1C" }}>
+          ⚠️ {syncError} Les modifications ne sont peut-être pas sauvegardées.
+        </div>
+      )}
+      <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-3" style={{ backgroundColor: BRAND.ink }}>
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm" style={{ backgroundColor: BRAND.soft }}>✨</div>
+          <div className="text-white font-semibold tracking-tight text-[15px]">
+            Mission<span style={{ color: BRAND.soft }}>:</span>Hired <span className="font-normal opacity-60 text-xs ml-1">CRM</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex rounded-lg p-0.5" style={{ backgroundColor: "rgba(255,255,255,0.1)" }}>
+            {(isAdmin ? ["agent", "admin"] : ["agent"]).map((r) => (
+              <button key={r} onClick={() => {
+                if (r === "admin" && !adminUnlocked) {
+                  const pwd = window.prompt("Mot de passe admin :");
+                  if (pwd !== ADMIN_PASSWORD) { if (pwd !== null) alert("Mot de passe incorrect."); return; }
+                  setAdminUnlocked(true);
+                }
+                setRole(r); setSelectedId(null); setView("liste");
+              }}
+                className="px-3.5 py-1.5 rounded-md text-xs font-medium capitalize transition-colors"
+                style={role === r ? { backgroundColor: BRAND.soft, color: BRAND.ink } : { color: "rgba(255,255,255,0.75)" }}>
+                {r === "agent" ? "Agent" : "Admin"}
+              </button>
+            ))}
+          </div>
+          {role === "agent" && (
+            <select value={currentAgent} onChange={(e) => {
+              const a = e.target.value;
+              setCurrentAgent(a);
+              if (!ADMINS.includes(a)) { setRole("agent"); }
+            }}
+              className="text-xs rounded-md px-2.5 py-2 border-0 outline-none"
+              style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "white" }}>
+              {AGENTS.map((a) => <option key={a} value={a} style={{ color: "black" }}>Connecté : {a}{ADMINS.includes(a) ? " (admin)" : ""}</option>)}
+            </select>
+          )}
+        </div>
+      </div>
+
+      {role === "agent" ? (
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="grid grid-cols-4 gap-3 mb-5">
+            <StatChip icon="👥" label="Non attribués" value={stats.unassigned} />
+            <StatChip icon="👤" label={`Mes candidats (${currentAgent})`} value={stats.mine} />
+            <StatChip icon="⏰" label="À relancer aujourd'hui" value={stats.toFollowUp} highlight="amber" />
+            <StatChip icon="🔥" label="Hot leads (à moi)" value={stats.hotMine} highlight="hot" />
+          </div>
+
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex rounded-lg border border-slate-200 bg-white overflow-hidden">
+              {[["liste", "Toutes les fiches"], ["relance", `À relancer${stats.toFollowUp ? ` (${stats.toFollowUp})` : ""}`]].map(([v, l]) => (
+                <button key={v} onClick={() => setView(v)} className="px-3.5 py-2 text-sm font-medium"
+                  style={view === v ? { backgroundColor: BRAND.ink, color: "white" } : { color: "#64748b" }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <FilterBar search={search} setSearch={setSearch} filterStatus={filterStatus} setFilterStatus={setFilterStatus}
+            filterScore={filterScore} setFilterScore={setFilterScore} filterCycle={filterCycle} setFilterCycle={setFilterCycle}
+            filterBootcamp={filterBootcamp} setFilterBootcamp={setFilterBootcamp} filterScope={filterScope} setFilterScope={setFilterScope} showScope />
+
+          <CandidateTable list={filtered} onOpen={setSelectedId} onAssign={assignToMe} showAgentCol />
+        </div>
+      ) : (
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="grid grid-cols-5 gap-3 mb-5">
+            <AdminCard icon="💰" label="Total encaissé" value={`${admin.revenue.toLocaleString()} DT`} />
+            <AdminCard icon="✅" label="Candidats payés" value={admin.totalPaid} />
+            <AdminCard icon="🛡️" label="Pack Standard" value={`${admin.standardCount} · ${(admin.standardCount * prices.standard).toLocaleString()} DT`} />
+            <AdminCard icon="✨" label="Pack Premium" value={`${admin.premiumCount} · ${(admin.premiumCount * prices.premium).toLocaleString()} DT`} />
+            <AdminCard icon="⚠️" label="À relancer (équipe)" value={admin.relances} />
+          </div>
+
+          <div className="grid grid-cols-[1fr_280px] gap-4 mb-5 items-start">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                📈 Performance par agent
+              </div>
+              <div className="grid grid-cols-6 gap-3 px-4 py-2 text-xs font-medium text-slate-400 uppercase tracking-wide border-b border-slate-100">
+                <div>Agent</div><div>Attribués</div><div>Contactés</div><div>Payés</div><div>Taux</div><div>Revenu généré</div>
+              </div>
+              {admin.perAgent.map((a) => (
+                <div key={a.agent} className="grid grid-cols-6 gap-3 px-4 py-3 border-b border-slate-50 last:border-0 text-sm">
+                  <div className="font-medium text-slate-800">{a.agent}</div>
+                  <div className="text-slate-600">{a.total}</div>
+                  <div className="text-slate-600">{a.contactes}</div>
+                  <div className="text-slate-600">{a.payes}</div>
+                  <div style={{ color: BRAND.mid, fontWeight: 600 }}>{a.taux}%</div>
+                  <div className="text-slate-600">{a.revenu.toLocaleString()} DT</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-3">⚙️ Tarifs des packs</div>
+              <div className="space-y-3">
+                <PriceInput label="Standard" value={prices.standard} onChange={(v) => setPrices((p) => ({ ...p, standard: v }))} />
+                <PriceInput label="Premium" value={prices.premium} onChange={(v) => setPrices((p) => ({ ...p, premium: v }))} />
+              </div>
+              <div className="text-[11px] text-slate-400 mt-3">Modifiable à tout moment — recalcule automatiquement les revenus.</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex rounded-lg border border-slate-200 bg-white overflow-hidden">
+              {[["liste", "Toutes les fiches"], ["relance", `À relancer${admin.relances ? ` (${admin.relances})` : ""}`]].map(([v, l]) => (
+                <button key={v} onClick={() => setView(v)} className="px-3.5 py-2 text-sm font-medium"
+                  style={view === v ? { backgroundColor: BRAND.ink, color: "white" } : { color: "#64748b" }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            <select value={filterAgentAdmin} onChange={(e) => setFilterAgentAdmin(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white text-sm px-3 py-2 outline-none">
+              <option value="all">Tous les agents</option>
+              {AGENTS.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+
+          <FilterBar search={search} setSearch={setSearch} filterStatus={filterStatus} setFilterStatus={setFilterStatus}
+            filterScore={filterScore} setFilterScore={setFilterScore} filterCycle={filterCycle} setFilterCycle={setFilterCycle}
+            filterBootcamp={filterBootcamp} setFilterBootcamp={setFilterBootcamp} />
+
+          <CandidateTable list={filtered} onOpen={setSelectedId} showAgentCol showReassign reassign={reassign} />
+        </div>
+      )}
+
+      {selected && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(4,52,44,0.35)" }} onClick={() => setSelectedId(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[88vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-5 flex items-start justify-between" style={{ backgroundColor: BRAND.ink }}>
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold shrink-0" style={{ backgroundColor: BRAND.soft, color: BRAND.ink }}>
+                  {initials(selected.nom)}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="text-lg font-semibold text-white">{selected.nom}</div>
+                    <ScoreBadge score={selected.score} />
+                    {selected.bootcamp === "non" && (
+                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700">
+                        👎 A dit non au formulaire
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs mt-0.5" style={{ color: BRAND.soft }}>
+                    {selected.ville} · Ajouté {timeAgo(selected.createdAt)} · Dernier contact {timeAgo(selected.lastContactAt)}
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setSelectedId(null)} className="text-white/70 hover:text-white shrink-0 text-lg">✕</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-6 p-6 overflow-y-auto">
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <Field label="Institut" value={selected.instType ? `${selected.institut} (${selected.instType})` : selected.institut} />
+                  <Field label="Niveau" value={selected.cycle} />
+                  <Field label="Spécialité" value={selected.specialite} span2 />
+                  <Field label="Situation" value={selected.situation} span2 />
+                  <Field label="Téléphone" value={selected.tel || "—"} />
+                  <Field label="Agent" value={selected.agent || "Non attribué"} />
+                  <Field label="Pays visés" value={selected.pays} span2 />
+                </div>
+
+                {!selected.agent && (
+                  <button onClick={() => assignToMe(selected.id)} className="w-full py-2.5 rounded-lg text-white text-sm font-medium" style={{ backgroundColor: BRAND.mid }}>
+                    M'attribuer cette fiche
+                  </button>
+                )}
+
+                <div>
+                  <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Statut</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {STATUS_ORDER.map((s) => (
+                      <button key={s} onClick={() => setStatus(selected.id, s)}
+                        className="rounded-full border px-2.5 py-1 text-xs font-medium"
+                        style={selected.status === s
+                          ? { color: STATUS[s].fg, backgroundColor: STATUS[s].bg, borderColor: STATUS[s].fg }
+                          : { color: "#94a3b8", backgroundColor: "white", borderColor: "#E2E8F0" }}>
+                        {STATUS[s].label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Paiement</div>
+                  <div className="flex gap-2">
+                    {["standard", "premium"].map((p) => (
+                      <button key={p} onClick={() => setPack(selected.id, p)}
+                        className="flex-1 rounded-lg border py-2 text-sm font-medium capitalize"
+                        style={selected.pack === p
+                          ? { backgroundColor: BRAND.ink, color: "white", borderColor: BRAND.ink }
+                          : { color: BRAND.ink, borderColor: BRAND.mintBorder, backgroundColor: BRAND.mint }}>
+                        {p} · {prices[p]} DT
+                      </button>
+                    ))}
+                  </div>
+                  {selected.status === "paye" && selected.customPrice != null && selected.customPrice !== prices[selected.pack] && (
+                    <div className="text-xs mt-1.5" style={{ color: BRAND.mid }}>
+                      Montant réellement payé : <strong>{selected.customPrice} DT</strong>
+                    </div>
+                  )}
+                </div>
+
+                <a href={waLink(selected)} target="_blank" rel="noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium text-white"
+                  style={{ backgroundColor: "#25D366" }}>
+                  💬 Envoyer un message WhatsApp
+                </a>
+              </div>
+
+              <div className="border-l border-slate-100 pl-6 flex flex-col">
+                <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Notes & suivi</div>
+                <div className="space-y-2 mb-3 flex-1 overflow-y-auto max-h-80">
+                  {selected.notes.length === 0 && <div className="text-sm text-slate-300 italic">Aucune note pour l'instant.</div>}
+                  {selected.notes.map((n, i) => (
+                    <div key={i} className="bg-slate-50 rounded-lg px-3 py-2 text-sm">
+                      <div className="text-xs text-slate-400 mb-0.5">{n.author} · {n.date}</div>
+                      <div className="text-slate-700">{n.text}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addNote(selected.id)}
+                    placeholder="Ajouter une note d'appel…"
+                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#1D9E75]" />
+                  <button onClick={() => addNote(selected.id)} className="rounded-lg px-3" style={{ backgroundColor: BRAND.mint }}>➕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PriceInput({ label, value, onChange }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="text-sm text-slate-600">{label}</div>
+      <div className="flex items-center gap-1.5">
+        <input type="number" value={value} onChange={(e) => onChange(Number(e.target.value))}
+          className="w-20 text-sm border border-slate-200 rounded-md px-2 py-1.5 outline-none focus:border-[#1D9E75] text-right" />
+        <span className="text-xs text-slate-400">DT</span>
+      </div>
+    </div>
+  );
+}
+
+function FilterBar({ search, setSearch, filterStatus, setFilterStatus, filterScore, setFilterScore, filterCycle, setFilterCycle, filterBootcamp, setFilterBootcamp, filterScope, setFilterScope, showScope }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 mb-4">
+      <div className="relative flex-1 min-w-[200px]">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+        <input value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="Rechercher un nom, une ville, un institut…"
+          className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:border-[#1D9E75]" />
+      </div>
+      <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-lg border border-slate-200 bg-white text-sm px-3 py-2 outline-none">
+        <option value="all">Tous les statuts</option>
+        {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS[s].label}</option>)}
+      </select>
+      <select value={filterScore} onChange={(e) => setFilterScore(e.target.value)} className="rounded-lg border border-slate-200 bg-white text-sm px-3 py-2 outline-none">
+        <option value="all">Tous les scores</option>
+        <option value="hot">🔥 Hot</option>
+        <option value="warm">⭐ Warm</option>
+        <option value="cold">❄️ Cold</option>
+      </select>
+      <select value={filterCycle} onChange={(e) => setFilterCycle(e.target.value)} className="rounded-lg border border-slate-200 bg-white text-sm px-3 py-2 outline-none">
+        <option value="all">Tous les niveaux</option>
+        {CYCLES.map((c) => <option key={c} value={c}>{c}</option>)}
+      </select>
+      <select value={filterBootcamp} onChange={(e) => setFilterBootcamp(e.target.value)} className="rounded-lg border border-slate-200 bg-white text-sm px-3 py-2 outline-none">
+        <option value="all">Intéressé (formulaire) : tous</option>
+        <option value="oui">Intéressé : Oui</option>
+        <option value="non">Intéressé : Non</option>
+      </select>
+      {showScope && (
+        <div className="flex rounded-lg border border-slate-200 bg-white overflow-hidden">
+          {[["all", "Tous"], ["mine", "Mes fiches"], ["unassigned", "Non attribués"]].map(([v, l]) => (
+            <button key={v} onClick={() => setFilterScope(v)} className="px-3 py-2 text-sm"
+              style={v === filterScope ? { backgroundColor: BRAND.mint, color: BRAND.ink, fontWeight: 600 } : { color: "#64748b" }}>
+              {l}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CandidateTable({ list, onOpen, onAssign, showAgentCol, showReassign, reassign }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-slate-400 border-b border-slate-100 uppercase tracking-wide">
+        <div className="w-9 shrink-0" />
+        <div className="flex-1">Candidat</div>
+        <div className="w-36 shrink-0">Statut</div>
+        {showAgentCol && <div className="w-20 shrink-0">Agent</div>}
+        <div className="w-24 shrink-0 text-right">Dernier contact</div>
+        <div className="w-28 shrink-0 text-right">Action</div>
+      </div>
+      {list.map((c) => {
+        const stale = !c.agent && hoursSince(c.createdAt) > 24;
+        return (
+          <div key={c.id} onClick={() => onOpen(c.id)}
+            className="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 cursor-pointer transition-colors"
+            style={stale ? { backgroundColor: "#FEF2F2" } : {}}>
+            <div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0"
+              style={{ backgroundColor: BRAND.mint, color: BRAND.ink }}>
+              {initials(c.nom)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-slate-800 truncate">{c.nom}</span>
+                <ScoreBadge score={c.score} />
+                {c.bootcamp === "non" && (
+                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-50 text-red-600">
+                    👎 Non au formulaire
+                  </span>
+                )}
+                {stale && <span className="text-[10px] font-semibold text-red-600 flex items-center gap-0.5">⚠️ +24h non traité</span>}
+              </div>
+              <div className="text-xs text-slate-400 truncate">{c.ville} · {c.institut} · {c.cycle} · {c.specialite}</div>
+            </div>
+            <div className="w-36 shrink-0 flex items-center gap-1.5">
+              <StatusBadge status={c.status} />
+              {(c.status === "injoignable" || c.status === "contacte") && c.tel && (
+                <a href={waLink(c)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                  title={c.status === "injoignable" ? "Envoyer le message 'injoignable'" : "Envoyer le message 'confirmation'"}
+                  className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-white text-xs"
+                  style={{ backgroundColor: "#25D366" }}>
+                  💬
+                </a>
+              )}
+            </div>
+            {showAgentCol && (
+              <div className="w-20 shrink-0 text-xs text-slate-500">
+                {showReassign ? (
+                  <select value={c.agent || ""} onClick={(e) => e.stopPropagation()} onChange={(e) => reassign(c.id, e.target.value || null)}
+                    className="text-xs border border-slate-200 rounded-md px-1.5 py-1 outline-none w-full">
+                    <option value="">—</option>
+                    {AGENTS.map((a) => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                ) : (c.agent || "—")}
+              </div>
+            )}
+            <div className="w-24 shrink-0 text-xs text-slate-400 text-right">{timeAgo(c.lastContactAt)}</div>
+            <div className="w-28 shrink-0 text-right">
+              {!c.agent && onAssign ? (
+                <button onClick={(e) => { e.stopPropagation(); onAssign(c.id); }}
+                  className="text-xs font-medium px-3 py-1.5 rounded-md text-white whitespace-nowrap"
+                  style={{ backgroundColor: BRAND.mid }}>
+                  M'attribuer
+                </button>
+              ) : (
+                <span className="text-slate-300 ml-auto">›</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {list.length === 0 && <div className="p-8 text-center text-sm text-slate-400">Aucun candidat pour ces filtres.</div>}
+    </div>
+  );
+}
+
+function Field({ label, value, span2 }) {
+  return (
+    <div className={span2 ? "col-span-2" : ""}>
+      <div className="text-xs text-slate-400 mb-0.5">{label}</div>
+      <div className="text-slate-700">{value}</div>
+    </div>
+  );
+}
+
+function StatChip({ icon, label, value, highlight }) {
+  const palette = highlight === "amber" ? { bg: "#FFFBEB", fg: "#B45309" } : highlight === "hot" ? { bg: "#FEF2F2", fg: "#B91C1C" } : { bg: BRAND.mint, fg: BRAND.ink };
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-3">
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm" style={{ backgroundColor: palette.bg, color: palette.fg }}>{icon}</div>
+      <div>
+        <div className="text-lg font-semibold text-slate-800 leading-none">{value}</div>
+        <div className="text-xs text-slate-400 mt-0.5">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function AdminCard({ icon, label, value }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 px-4 py-3.5">
+      <div className="flex items-center gap-2 text-xs text-slate-400 mb-1.5"><span>{icon}</span>{label}</div>
+      <div className="text-lg font-semibold" style={{ color: BRAND.ink }}>{value}</div>
+    </div>
+  );
+}
+
+ReactDOM.render(<MissionHiredCRM />, document.getElementById("root"));
+</script>
+</body>
+</html>
