@@ -197,7 +197,7 @@
       <div class="brand-name">Mission:Hired</div>
     </div>
 
-    <h1>Parlons de votre premier emploi</h1>
+    <h1>Parlons de votre emploi</h1>
     <p class="lede">Ce questionnaire nous permet de mieux cerner votre profil et votre projet pour vous proposer un accompagnement adapté. Ça prend environ 3 minutes.</p>
 
     <form id="candForm" novalidate>
@@ -262,16 +262,6 @@
       <div class="section">
         <p class="section-title">Votre objectif</p>
         <p class="section-sub">Ce que vous cherchez en ce moment.</p>
-        <div class="field" data-field="goal">
-          <label>Type de recherche <span class="req">*</span></label>
-          <div class="choices" data-group="goal">
-            <label class="choice"><input type="radio" name="goal" value="Stage PFE">Stage PFE</label>
-            <label class="choice"><input type="radio" name="goal" value="Premier emploi">Premier emploi</label>
-            <label class="choice"><input type="radio" name="goal" value="Alternance">Alternance</label>
-            <label class="choice"><input type="radio" name="goal" value="Je ne sais pas encore">Je ne sais pas encore</label>
-          </div>
-          <p class="error-text">Choisissez une option.</p>
-        </div>
         <div class="field" data-field="countries">
           <label>Pays ciblés</label>
           <input type="text" name="countries" placeholder="France, Allemagne, Canada..">
@@ -336,8 +326,8 @@
             </select>
           </div>
           <div class="field" data-field="availability">
-            <label>Dispo pour un premier appel</label>
-            <input type="text" name="availability" placeholder="Ex: en semaine après 18h">
+            <label>Votre numéro de téléphone</label>
+            <input type="tel" name="availability" placeholder="+216 ..">
           </div>
         </div>
       </div>
@@ -405,7 +395,6 @@ form.addEventListener('submit', async (e) => {
   if(!data.email || !isValidEmail(data.email)){ setInvalid('email'); valid = false; }
   if(!data.phone || !data.phone.trim()){ setInvalid('phone'); valid = false; }
   if(!data.level){ setInvalid('level'); valid = false; }
-  if(!data.goal){ setInvalid('goal'); valid = false; }
 
   if(!valid){
     statusMsg.textContent = "Merci de compléter les champs marqués d'un *.";
